@@ -4,6 +4,7 @@ import { api } from "../api";
 
 export default function GatePage() {
   const [qrToken, setQrToken] = useState("");
+  const [qrTokenError, setQrTokenError] = useState("");
   const [scanResult, setScanResult] = useState(null);
   const [cameraError, setCameraError] = useState("");
   const [scanHint, setScanHint] = useState("");
@@ -22,6 +23,11 @@ export default function GatePage() {
 
   async function scanTicket(event) {
     event.preventDefault();
+    if (!qrToken.trim()) {
+      setQrTokenError("Поле обязательно");
+      return;
+    }
+    setQrTokenError("");
     await submitScannedToken(qrToken);
   }
 
@@ -30,9 +36,18 @@ export default function GatePage() {
       const { data } = await api.post("/gate/scan", { scan_value: tokenValue.trim() });
       setScanResult(data);
       setScanHint("");
-    } catch {
-      setScanResult({ allowed: false, message: "Ошибка проверки QR" });
+    } catch (error) {
+      const detail = error?.response?.data?.detail || "Ошибка проверки QR";
+      setScanResult({ allowed: false, message: detail });
     }
+  }
+
+  function getQrboxSize() {
+    const viewportWidth = window.innerWidth || 360;
+    const viewportHeight = window.innerHeight || 640;
+    const sizeByWidth = Math.floor(viewportWidth * 0.72);
+    const sizeByHeight = Math.floor(viewportHeight * 0.42);
+    return Math.max(190, Math.min(sizeByWidth, sizeByHeight, 340));
   }
 
   async function startCameraScanner() {
@@ -49,13 +64,14 @@ export default function GatePage() {
 
       await scannerRef.current.start(
         { facingMode: "environment" },
-        { fps: 10, qrbox: { width: 240, height: 240 } },
-        (decodedText) => {
+        { fps: 12, qrbox: { width: getQrboxSize(), height: getQrboxSize() }, aspectRatio: 1 },
+        async (decodedText) => {
           if (processingScanRef.current) return;
           processingScanRef.current = true;
           setQrToken(decodedText);
-          setScanHint("Код считан камерой. Нажми «Проверить код».");
-          stopCameraScanner();
+          setScanHint("Код считан. Выполняем автоматическую проверку...");
+          await submitScannedToken(decodedText);
+          await stopCameraScanner();
           processingScanRef.current = false;
         },
         () => {}
@@ -111,9 +127,10 @@ export default function GatePage() {
         <p className="muted">Используй камеру, изображение или ручной ввод для проверки билета.</p>
       </section>
 
-      <form className="card" onSubmit={scanTicket}>
+      <form className="card" onSubmit={scanTicket} noValidate>
         <h3>Проверка QR</h3>
         <p className="muted">Можно сканировать камерой, загрузить фото QR или ввести короткий 8-значный код вручную.</p>
+        <p className="muted">На телефоне для работы камеры лучше открывать сайт по HTTPS (или с localhost).</p>
         <div className="camera-actions">
           <button type="button" onClick={startCameraScanner} disabled={isCameraScanning}>
             Запустить камеру
@@ -141,10 +158,17 @@ export default function GatePage() {
           QR Token или короткий код
           <textarea
             value={qrToken}
-            onChange={(e) => setQrToken(e.target.value)}
+            onChange={(e) => {
+              setQrToken(e.target.value);
+              if (qrTokenError) setQrTokenError("");
+            }}
             rows={4}
+            className={qrTokenError ? "input-error" : ""}
             required
           />
+          <span className={`field-error ${qrTokenError ? "" : "field-error-placeholder"}`}>
+            {qrTokenError || "."}
+          </span>
         </label>
         <button type="submit">Проверить код</button>
       </form>

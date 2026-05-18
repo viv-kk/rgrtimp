@@ -7,6 +7,7 @@ export default function AdminCashierRequestsPage() {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [actionError, setActionError] = useState("");
 
   useEffect(() => {
     loadRequests();
@@ -15,6 +16,7 @@ export default function AdminCashierRequestsPage() {
   async function loadRequests() {
     setLoading(true);
     setError("");
+    setActionError("");
     try {
       const { data } = await api.get("/admin/cashier-requests");
       setRequests(data || []);
@@ -26,20 +28,22 @@ export default function AdminCashierRequestsPage() {
   }
 
   async function approveRequest(requestId) {
+    setActionError("");
     try {
       await api.post(`/admin/cashier-requests/${requestId}/approve`);
       setRequests((prev) => prev.filter((item) => item.id !== requestId));
     } catch (err) {
-      alert(err?.response?.data?.detail || "Не удалось подтвердить заявку");
+      setActionError(err?.response?.data?.detail || "Не удалось подтвердить заявку");
     }
   }
 
   async function rejectRequest(requestId) {
+    setActionError("");
     try {
       await api.delete(`/admin/cashier-requests/${requestId}`);
       setRequests((prev) => prev.filter((item) => item.id !== requestId));
     } catch (err) {
-      alert(err?.response?.data?.detail || "Не удалось отклонить заявку");
+      setActionError(err?.response?.data?.detail || "Не удалось отклонить заявку");
     }
   }
 
@@ -68,6 +72,7 @@ export default function AdminCashierRequestsPage() {
         </div>
 
         {error && <p className="error">{error}</p>}
+        {actionError && <p className="error">{actionError}</p>}
         {!error && requests.length === 0 && <p className="muted">Сейчас нет новых заявок.</p>}
 
         {requests.length > 0 && (

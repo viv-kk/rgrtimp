@@ -13,6 +13,9 @@ export default function AdminVenuesPage() {
   const { me } = useAuth();
   const [venues, setVenues] = useState([]);
   const [venueForm, setVenueForm] = useState(defaultVenueForm);
+  const [nameError, setNameError] = useState("");
+  const [capacityError, setCapacityError] = useState("");
+  const [formError, setFormError] = useState("");
 
   useEffect(() => {
     loadVenues();
@@ -29,16 +32,39 @@ export default function AdminVenuesPage() {
 
   async function createVenue(event) {
     event.preventDefault();
+    setFormError("");
+    const venueName = venueForm.name.trim();
+    if (!venueName) {
+      setNameError("Поле обязательно");
+      return;
+    }
+    setNameError("");
+    const rawCapacity = venueForm.capacity.trim();
+    let parsedCapacity = null;
+    if (rawCapacity) {
+      parsedCapacity = Number(rawCapacity);
+      if (!Number.isInteger(parsedCapacity)) {
+        setCapacityError("Поле должно содержать целое число");
+        return;
+      }
+      if (parsedCapacity < 1) {
+        setCapacityError("Вместимость должна быть не меньше 1");
+        return;
+      }
+    }
+    setCapacityError("");
     try {
       await api.post("/venues", {
-        name: venueForm.name,
+        name: venueName,
         address: venueForm.address || null,
-        capacity: venueForm.capacity ? Number(venueForm.capacity) : null
+        capacity: parsedCapacity
       });
       setVenueForm(defaultVenueForm);
       loadVenues();
+      setNameError("");
+      setCapacityError("");
     } catch (error) {
-      alert(error?.response?.data?.detail || "Не удалось создать площадку");
+      setFormError(error?.response?.data?.detail || "Не удалось создать площадку");
     }
   }
 
@@ -49,7 +75,7 @@ export default function AdminVenuesPage() {
       await api.delete(`/venues/${venueId}`);
       loadVenues();
     } catch (error) {
-      alert(error?.response?.data?.detail || "Не удалось удалить площадку");
+      setFormError(error?.response?.data?.detail || "Не удалось удалить площадку");
     }
   }
 
@@ -69,15 +95,20 @@ export default function AdminVenuesPage() {
         <p className="muted">Создавай площадки, которые затем можно выбирать при создании мероприятий.</p>
       </section>
 
-      <form className="card" onSubmit={createVenue}>
+      <form className="card" onSubmit={createVenue} noValidate>
         <h3>Создать площадку</h3>
         <label>
           Название площадки
           <input
             value={venueForm.name}
-            onChange={(e) => setVenueForm({ ...venueForm, name: e.target.value })}
+            onChange={(e) => {
+              setVenueForm({ ...venueForm, name: e.target.value });
+              if (nameError) setNameError("");
+            }}
+            className={nameError ? "input-error" : ""}
             required
           />
+          {nameError && <span className="field-error">{nameError}</span>}
         </label>
         <label>
           Адрес
@@ -90,13 +121,21 @@ export default function AdminVenuesPage() {
         <label>
           Вместимость
           <input
-            type="number"
-            min="1"
+            type="text"
+            inputMode="numeric"
             value={venueForm.capacity}
-            onChange={(e) => setVenueForm({ ...venueForm, capacity: e.target.value })}
+            onChange={(e) => {
+              setVenueForm({ ...venueForm, capacity: e.target.value });
+              if (capacityError) setCapacityError("");
+            }}
+            className={capacityError ? "input-error" : ""}
             placeholder="Например 10000"
           />
+          <span className={`field-error ${capacityError ? "" : "field-error-placeholder"}`}>
+            {capacityError || "."}
+          </span>
         </label>
+        {formError && <p className="error">{formError}</p>}
         <button type="submit">Создать площадку</button>
       </form>
 

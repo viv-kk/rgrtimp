@@ -82,6 +82,7 @@ export default function AdminEventsPage() {
   const [venues, setVenues] = useState([]);
   const [eventForm, setEventForm] = useState(defaultEventForm);
   const [createErrors, setCreateErrors] = useState({});
+  const [formError, setFormError] = useState("");
 
   useEffect(() => {
     loadVenues();
@@ -98,9 +99,14 @@ export default function AdminEventsPage() {
 
   async function createEvent(event) {
     event.preventDefault();
-    const errors = validateDateTimeFields(eventForm.starts_date, eventForm.starts_time);
+    const errors = {
+      ...validateDateTimeFields(eventForm.starts_date, eventForm.starts_time),
+      title: eventForm.title.trim() ? "" : "Поле обязательно",
+      venue_id: eventForm.venue_id ? "" : "Выбери площадку"
+    };
     setCreateErrors(errors);
-    if (Object.keys(errors).length > 0) return;
+    if (Object.values(errors).some(Boolean)) return;
+    setFormError("");
 
     const startsAtIso = buildIsoDateTime(eventForm.starts_date, eventForm.starts_time);
     if (!startsAtIso) return;
@@ -114,8 +120,8 @@ export default function AdminEventsPage() {
       setEventForm(defaultEventForm);
       setCreateErrors({});
       loadEvents();
-    } catch {
-      alert("Не удалось создать мероприятие");
+    } catch (error) {
+      setFormError(error?.response?.data?.detail || "Не удалось создать мероприятие");
     }
   }
 
@@ -126,7 +132,7 @@ export default function AdminEventsPage() {
       await api.delete(`/events/${eventId}`);
       loadEvents();
     } catch (error) {
-      alert(error?.response?.data?.detail || "Не удалось удалить мероприятие");
+      setFormError(error?.response?.data?.detail || "Не удалось удалить мероприятие");
     }
   }
 
@@ -173,22 +179,31 @@ export default function AdminEventsPage() {
         <p className="muted">Создавай мероприятия и привязывай их к существующим площадкам.</p>
       </section>
 
-      <form className="card" onSubmit={createEvent}>
+      <form className="card" onSubmit={createEvent} noValidate>
         <h3>Создать мероприятие</h3>
         <label>
           Название
           <input
             value={eventForm.title}
-            onChange={(e) => setEventForm({ ...eventForm, title: e.target.value })}
+            onChange={(e) => {
+              setEventForm({ ...eventForm, title: e.target.value });
+              setCreateErrors((prev) => ({ ...prev, title: "" }));
+            }}
+            className={createErrors.title ? "input-error" : ""}
             required
           />
+          {createErrors.title && <span className="field-error">{createErrors.title}</span>}
         </label>
         {venues.length === 0 && <p className="error">Сначала создай площадку во вкладке "Управление площадками".</p>}
         <label>
           Площадка
           <select
             value={eventForm.venue_id}
-            onChange={(e) => setEventForm({ ...eventForm, venue_id: e.target.value })}
+            onChange={(e) => {
+              setEventForm({ ...eventForm, venue_id: e.target.value });
+              setCreateErrors((prev) => ({ ...prev, venue_id: "" }));
+            }}
+            className={createErrors.venue_id ? "input-error" : ""}
             required
             disabled={venues.length === 0}
           >
@@ -199,6 +214,7 @@ export default function AdminEventsPage() {
               </option>
             ))}
           </select>
+          {createErrors.venue_id && <span className="field-error">{createErrors.venue_id}</span>}
         </label>
         <div className="datetime-grid">
           <label>
@@ -239,6 +255,7 @@ export default function AdminEventsPage() {
         <button type="submit" disabled={venues.length === 0}>
           Создать
         </button>
+        {formError && <p className="error">{formError}</p>}
       </form>
 
       <section className="card">

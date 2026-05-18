@@ -209,9 +209,11 @@ button:disabled {
 
 .field-error {
   display: block;
-  min-height: 16px;
+  min-height: 12px;
   color: #b91c1c;
-  font-size: 12px;
+  font-size: 11px;
+  line-height: 1.1;
+  margin-top: -2px;
 }
 
 .field-error-placeholder {
@@ -267,8 +269,8 @@ button:disabled {
 }
 
 .camera-box.visible {
-  max-height: 340px;
-  min-height: 280px;
+  max-height: 72vh;
+  min-height: 340px;
   padding: 8px;
 }
 
@@ -518,9 +520,8 @@ button:disabled {
   place-items: center;
   padding: 24px;
   background:
-    radial-gradient(circle at 15% 15%, rgba(59, 130, 246, 0.26), transparent 35%),
-    radial-gradient(circle at 85% 20%, rgba(99, 102, 241, 0.2), transparent 30%),
-    linear-gradient(160deg, #020617 0%, #0f172a 40%, #111827 100%);
+    linear-gradient(rgba(2, 6, 23, 0.58), rgba(2, 6, 23, 0.68)),
+    url("./assets-login-bg.jpg") center / cover no-repeat;
 }
 
 .login-glass {
@@ -566,6 +567,15 @@ button:disabled {
   color: #f8fafc;
 }
 
+.login-password-wrap {
+  position: relative;
+}
+
+.login-password-wrap input {
+  width: 100%;
+  padding-right: 44px;
+}
+
 .login-field input::placeholder {
   color: rgba(203, 213, 225, 0.85);
 }
@@ -585,6 +595,35 @@ button:disabled {
   color: #111827;
   font-size: 16px;
   font-weight: 700;
+}
+
+.login-password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid rgba(148, 163, 184, 0.5);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.55);
+  color: #e2e8f0;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.login-password-toggle svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+  margin: 0 auto;
+}
+
+.login-password-toggle:hover {
+  transform: translateY(-50%);
+  box-shadow: 0 6px 12px rgba(29, 78, 216, 0.2);
 }
 
 .login-error {
@@ -621,5 +660,10 @@ button:disabled {
   .header-actions {
     width: 100%;
     justify-content: space-between;
+  }
+
+  .camera-box.visible {
+    min-height: 380px;
+    max-height: 78vh;
   }
 }

@@ -16,6 +16,9 @@ export default function AdminEditVenuePage() {
   const [venueForm, setVenueForm] = useState(defaultVenueForm);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [nameError, setNameError] = useState("");
+  const [capacityError, setCapacityError] = useState("");
+  const [formError, setFormError] = useState("");
 
   useEffect(() => {
     loadVenue();
@@ -45,15 +48,36 @@ export default function AdminEditVenuePage() {
 
   async function saveVenue(event) {
     event.preventDefault();
+    setFormError("");
+    const venueName = venueForm.name.trim();
+    if (!venueName) {
+      setNameError("Поле обязательно");
+      return;
+    }
+    setNameError("");
+    const rawCapacity = venueForm.capacity.trim();
+    let parsedCapacity = null;
+    if (rawCapacity) {
+      parsedCapacity = Number(rawCapacity);
+      if (!Number.isInteger(parsedCapacity)) {
+        setCapacityError("Поле должно содержать целое число");
+        return;
+      }
+      if (parsedCapacity < 1) {
+        setCapacityError("Вместимость должна быть не меньше 1");
+        return;
+      }
+    }
+    setCapacityError("");
     try {
       await api.put(`/venues/${venueId}`, {
-        name: venueForm.name,
+        name: venueName,
         address: venueForm.address || null,
-        capacity: venueForm.capacity ? Number(venueForm.capacity) : null
+        capacity: parsedCapacity
       });
       navigate("/admin/venues");
     } catch (error) {
-      alert(error?.response?.data?.detail || "Не удалось обновить площадку");
+      setFormError(error?.response?.data?.detail || "Не удалось обновить площадку");
     }
   }
 
@@ -84,15 +108,20 @@ export default function AdminEditVenuePage() {
   }
 
   return (
-    <form className="card" onSubmit={saveVenue}>
+    <form className="card" onSubmit={saveVenue} noValidate>
       <h2>Редактировать площадку</h2>
       <label>
         Название площадки
         <input
           value={venueForm.name}
-          onChange={(e) => setVenueForm({ ...venueForm, name: e.target.value })}
+          onChange={(e) => {
+            setVenueForm({ ...venueForm, name: e.target.value });
+            if (nameError) setNameError("");
+          }}
+          className={nameError ? "input-error" : ""}
           required
         />
+        {nameError && <span className="field-error">{nameError}</span>}
       </label>
       <label>
         Адрес
@@ -101,12 +130,20 @@ export default function AdminEditVenuePage() {
       <label>
         Вместимость
         <input
-          type="number"
-          min="1"
+          type="text"
+          inputMode="numeric"
           value={venueForm.capacity}
-          onChange={(e) => setVenueForm({ ...venueForm, capacity: e.target.value })}
+          onChange={(e) => {
+            setVenueForm({ ...venueForm, capacity: e.target.value });
+            if (capacityError) setCapacityError("");
+          }}
+          className={capacityError ? "input-error" : ""}
         />
+        <span className={`field-error ${capacityError ? "" : "field-error-placeholder"}`}>
+          {capacityError || "."}
+        </span>
       </label>
+      {formError && <p className="error">{formError}</p>}
       <div className="item-actions">
         <button type="submit">Сохранить</button>
         <Link to="/admin/venues" className="button-link">

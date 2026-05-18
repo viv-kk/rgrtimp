@@ -11,6 +11,8 @@ const defaultTicketForm = {
 export default function SalesPage() {
   const { events } = useAuth();
   const [ticketForm, setTicketForm] = useState(defaultTicketForm);
+  const [priceError, setPriceError] = useState("");
+  const [saleError, setSaleError] = useState("");
   const [selectedSeats, setSelectedSeats] = useState([]);
   const [seatMap, setSeatMap] = useState({ rows: 8, cols: 12, taken_seats: [] });
   const [seatMapError, setSeatMapError] = useState("");
@@ -18,6 +20,7 @@ export default function SalesPage() {
   const [activeTicketId, setActiveTicketId] = useState(null);
   const [emailToSend, setEmailToSend] = useState("");
   const [emailStatus, setEmailStatus] = useState("");
+  const [emailError, setEmailError] = useState("");
 
   useEffect(() => {
     if (!ticketForm.event_id) {
@@ -60,12 +63,28 @@ export default function SalesPage() {
   async function sellTicket(event) {
     event.preventDefault();
     setEmailStatus("");
+    setSaleError("");
+    const rawPrice = ticketForm.price_per_ticket.trim();
+    const parsedPrice = Number(rawPrice.replace(",", "."));
+    if (!rawPrice) {
+      setPriceError("Укажи цену билета");
+      return;
+    }
+    if (!Number.isFinite(parsedPrice)) {
+      setPriceError("Поле должно содержать число");
+      return;
+    }
+    if (parsedPrice <= 0) {
+      setPriceError("Цена должна быть больше 0");
+      return;
+    }
+    setPriceError("");
     try {
       const payload = {
         ...ticketForm,
         event_id: Number(ticketForm.event_id),
         seat_labels: selectedSeats,
-        price_per_ticket: Number(ticketForm.price_per_ticket)
+        price_per_ticket: parsedPrice
       };
       const { data } = await api.post("/tickets/sell-batch", payload);
       setSaleResult(data);
@@ -73,18 +92,28 @@ export default function SalesPage() {
       setTicketForm(defaultTicketForm);
       setSelectedSeats([]);
       await loadSeatMap(payload.event_id);
-    } catch {
-      alert("Ошибка продажи билетов");
+    } catch (error) {
+      setSaleError(error?.response?.data?.detail || "Ошибка продажи билетов");
     }
   }
 
   async function sendQrToEmail(event) {
     event.preventDefault();
     if (!activeTicket?.id) return;
+    const email = emailToSend.trim();
+    if (!email) {
+      setEmailError("Поле обязательно");
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setEmailError("Укажи корректный email");
+      return;
+    }
+    setEmailError("");
     try {
       const ticketIds = saleResult?.tickets?.map((ticket) => ticket.id) || [activeTicket.id];
       const { data } = await api.post(`/tickets/${activeTicket.id}/send-email`, {
-        email: emailToSend.trim(),
+        email,
         ticket_ids: ticketIds
       });
       setEmailStatus(data.message || "Письмо отправлено");
@@ -101,7 +130,7 @@ export default function SalesPage() {
         <p className="muted">Оформи билет, скачай QR и при необходимости отправь его на email посетителя.</p>
       </section>
 
-      <form className="card" onSubmit={sellTicket}>
+      <form className="card" onSubmit={sellTicket} noValidate>
         <h3>Новый билет</h3>
         <label>
           Мероприятие
@@ -161,14 +190,22 @@ export default function SalesPage() {
         <label>
           Цена за 1 билет
           <input
-            type="number"
-            min="0"
-            step="0.01"
+            type="text"
+            inputMode="decimal"
             value={ticketForm.price_per_ticket}
-            onChange={(e) => setTicketForm({ ...ticketForm, price_per_ticket: e.target.value })}
+            onChange={(e) => {
+              setTicketForm({ ...ticketForm, price_per_ticket: e.target.value });
+              if (priceError) setPriceError("");
+            }}
+            className={priceError ? "input-error" : ""}
+            placeholder="Например 1200.50"
             required
           />
+          <span className={`field-error ${priceError ? "" : "field-error-placeholder"}`}>
+            {priceError || "."}
+          </span>
         </label>
+        {saleError && <p className="error">{saleError}</p>}
         <p className="muted">
           Итого:{" "}
           <strong>
@@ -224,16 +261,23 @@ export default function SalesPage() {
             </>
           )}
 
-          <form className="email-form" onSubmit={sendQrToEmail}>
+          <form className="email-form" onSubmit={sendQrToEmail} noValidate>
             <label>
               Email посетителя
               <input
                 type="email"
                 value={emailToSend}
-                onChange={(e) => setEmailToSend(e.target.value)}
+                onChange={(e) => {
+                  setEmailToSend(e.target.value);
+                  if (emailError) setEmailError("");
+                }}
+                className={emailError ? "input-error" : ""}
                 placeholder="visitor@example.com"
                 required
               />
+              <span className={`field-error ${emailError ? "" : "field-error-placeholder"}`}>
+                {emailError || "."}
+              </span>
             </label>
             <button type="submit">Отправить PDF-билет на почту</button>
           </form>

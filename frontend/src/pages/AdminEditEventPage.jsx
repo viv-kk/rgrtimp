@@ -95,6 +95,7 @@ export default function AdminEditEventPage() {
   const [venues, setVenues] = useState([]);
   const [eventForm, setEventForm] = useState(defaultEventForm);
   const [errors, setErrors] = useState({});
+  const [formError, setFormError] = useState("");
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
@@ -135,9 +136,14 @@ export default function AdminEditEventPage() {
 
   async function saveEvent(event) {
     event.preventDefault();
-    const formErrors = validateDateTimeFields(eventForm.starts_date, eventForm.starts_time);
+    const formErrors = {
+      ...validateDateTimeFields(eventForm.starts_date, eventForm.starts_time),
+      title: eventForm.title.trim() ? "" : "Поле обязательно",
+      venue_id: eventForm.venue_id ? "" : "Выбери площадку"
+    };
     setErrors(formErrors);
-    if (Object.keys(formErrors).length > 0) return;
+    if (Object.values(formErrors).some(Boolean)) return;
+    setFormError("");
 
     const startsAtIso = buildIsoDateTime(eventForm.starts_date, eventForm.starts_time);
     if (!startsAtIso) return;
@@ -150,7 +156,7 @@ export default function AdminEditEventPage() {
       });
       navigate("/admin/events");
     } catch (error) {
-      alert(error?.response?.data?.detail || "Не удалось обновить мероприятие");
+      setFormError(error?.response?.data?.detail || "Не удалось обновить мероприятие");
     }
   }
 
@@ -207,17 +213,30 @@ export default function AdminEditEventPage() {
   }
 
   return (
-    <form className="card" onSubmit={saveEvent}>
+    <form className="card" onSubmit={saveEvent} noValidate>
       <h2>Редактировать мероприятие</h2>
       <label>
         Название
-        <input value={eventForm.title} onChange={(e) => setEventForm({ ...eventForm, title: e.target.value })} required />
+        <input
+          value={eventForm.title}
+          onChange={(e) => {
+            setEventForm({ ...eventForm, title: e.target.value });
+            setErrors((prev) => ({ ...prev, title: "" }));
+          }}
+          className={errors.title ? "input-error" : ""}
+          required
+        />
+        {errors.title && <span className="field-error">{errors.title}</span>}
       </label>
       <label>
         Площадка
         <select
           value={eventForm.venue_id}
-          onChange={(e) => setEventForm({ ...eventForm, venue_id: e.target.value })}
+          onChange={(e) => {
+            setEventForm({ ...eventForm, venue_id: e.target.value });
+            setErrors((prev) => ({ ...prev, venue_id: "" }));
+          }}
+          className={errors.venue_id ? "input-error" : ""}
           required
           disabled={venues.length === 0}
         >
@@ -228,6 +247,7 @@ export default function AdminEditEventPage() {
             </option>
           ))}
         </select>
+        {errors.venue_id && <span className="field-error">{errors.venue_id}</span>}
       </label>
 
       <div className="datetime-grid">
@@ -273,6 +293,7 @@ export default function AdminEditEventPage() {
           Отмена
         </Link>
       </div>
+      {formError && <p className="error">{formError}</p>}
     </form>
   );
 }

@@ -63,6 +63,7 @@ SMTP_USER=v1ta.1i20o60@gmail.com
 SMTP_PASSWORD=google_app_password
 SMTP_FROM=v1ta.1i20o60@gmail.com
 SMTP_USE_TLS=true
+SMTP_TIMEOUT_SECONDS=20
 REFRESH_TOKEN_EXPIRE_DAYS=14
 MAX_FAILED_LOGIN_ATTEMPTS=5
 LOGIN_LOCK_MINUTES=15
@@ -70,7 +71,7 @@ ADMIN_USERNAME=admin
 ADMIN_PASSWORD=your_strong_admin_password
 ```
 
-`SMTP_PASSWORD` — это пароль приложения Google (App Password), не обычный пароль от аккаунта.
+`SMTP_PASSWORD` — это пароль приложения Google (App Password), не обычный пароль от аккаунта. Вставляй без пробелов (если Google показывает группами по 4 символа, просто убери пробелы).
 
 ## 3) Запуск frontend (React)
 

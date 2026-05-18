@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import io
 import os
+import re
 import secrets
 import smtplib
 import uuid
@@ -26,6 +27,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
 from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, create_engine, func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship, sessionmaker
 
 load_dotenv()
@@ -56,6 +58,7 @@ SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 LOGIN_ATTEMPTS: dict[str, dict] = {}
+PASSWORD_MIN_LENGTH = 10
 
 
 class Base(DeclarativeBase):
@@ -387,6 +390,22 @@ def register_failed_login(username_key: str) -> None:
 
 def clear_login_attempts(username_key: str) -> None:
     LOGIN_ATTEMPTS.pop(username_key, None)
+
+
+def validate_password_strength(password: str) -> str | None:
+    if len(password) < PASSWORD_MIN_LENGTH:
+        return f"Пароль должен быть не короче {PASSWORD_MIN_LENGTH} символов"
+    if " " in password:
+        return "Пароль не должен содержать пробелы"
+    if not re.search(r"[a-z]", password):
+        return "Пароль должен содержать хотя бы одну строчную букву"
+    if not re.search(r"[A-Z]", password):
+        return "Пароль должен содержать хотя бы одну заглавную букву"
+    if not re.search(r"\d", password):
+        return "Пароль должен содержать хотя бы одну цифру"
+    if not re.search(r"[^A-Za-z0-9]", password):
+        return "Пароль должен содержать хотя бы один спецсимвол"
+    return None
 
 
 def create_ticket_token(ticket_uuid: str, event_id: int) -> str:
@@ -841,18 +860,19 @@ def healthcheck():
 
 @app.post("/auth/login", response_model=TokenResponse)
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    username_key = form_data.username.strip().lower()
+    username = form_data.username.strip()
+    username_key = username.lower()
     lock_seconds = get_login_lock_seconds(username_key)
     if lock_seconds > 0:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Слишком много попыток входа. Повтори через {lock_seconds} сек.",
+            detail=f"Слишком много попыток входа. Повторите через {lock_seconds} сек.",
         )
 
-    user = db.scalar(select(User).where(User.username == form_data.username))
+    user = db.scalar(select(User).where(User.username == username))
     if not user or not verify_password(form_data.password, user.password_hash):
         register_failed_login(username_key)
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid username or password")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Неверный логин или пароль")
     clear_login_attempts(username_key)
     return issue_token_pair(db, user)
 
@@ -860,10 +880,11 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 @app.post("/auth/cashier-register", status_code=status.HTTP_201_CREATED)
 def register_cashier(payload: CashierRegisterRequest, db: Session = Depends(get_db)):
     username = payload.username.strip()
+    password_error = validate_password_strength(payload.password)
     if len(username) < 3:
         raise HTTPException(status_code=400, detail="Логин должен быть не короче 3 символов")
-    if len(payload.password) < 6:
-        raise HTTPException(status_code=400, detail="Пароль должен быть не короче 6 символов")
+    if password_error:
+        raise HTTPException(status_code=400, detail=password_error)
 
     existing_user = db.scalar(select(User).where(User.username == username))
     if existing_user:
@@ -873,16 +894,20 @@ def register_cashier(payload: CashierRegisterRequest, db: Session = Depends(get_
     if existing_request:
         raise HTTPException(status_code=409, detail="Заявка с таким логином уже отправлена и ожидает подтверждения")
 
-    request = CashierRegistrationRequest(username=username, password_hash=hash_password(payload.password))
-    db.add(request)
-    append_system_audit(
-        db,
-        event_type="cashier_request_submitted",
-        actor=username,
-        action="Заявка кассира создана",
-        details=f"Кассир {username} отправил заявку на регистрацию",
-    )
-    db.commit()
+    try:
+        request = CashierRegistrationRequest(username=username, password_hash=hash_password(payload.password))
+        db.add(request)
+        append_system_audit(
+            db,
+            event_type="cashier_request_submitted",
+            actor=username,
+            action="Заявка кассира создана",
+            details=f"Кассир {username} отправил заявку на регистрацию",
+        )
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Заявка с таким логином уже существует")
     return {"ok": True, "message": "Заявка отправлена. Дождитесь подтверждения администратора."}
 
 
@@ -944,7 +969,11 @@ def approve_cashier_request(
         details=f"Администратор {current_user.username} подтвердил заявку кассира {user.username}",
     )
     db.delete(request)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Не удалось подтвердить заявку: логин уже занят")
     db.refresh(user)
     return user
 
